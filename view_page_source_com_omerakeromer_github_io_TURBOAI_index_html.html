@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OMERAI</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #333;
+    }
+    #chatbox {
+      width: 90%;
+      max-width: 600px;
+      background-color: white;
+      border-radius: 15px;
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #header {
+      background: linear-gradient(135deg, #007bff, #6c63ff);
+      color: white;
+      padding: 20px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    #messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      background-color: #f9f9f9;
+      position: relative;
+      scrollbar-width: thin;
+      scrollbar-color: #007bff #f4f4f4;
+    }
+    #messages::-webkit-scrollbar {
+      width: 8px;
+    }
+    #messages::-webkit-scrollbar-thumb {
+      background: #007bff;
+      border-radius: 10px;
+    }
+    #messages::-webkit-scrollbar-track {
+      background: #f4f4f4;
+    }
+    #messages div {
+      margin-bottom: 15px;
+      border-radius: 10px;
+      padding: 12px;
+      max-width: 70%;
+      word-wrap: break-word;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+    .user-message {
+      background: linear-gradient(135deg, #007bff, #6c63ff);
+      color: white;
+      text-align: left;
+      align-self: flex-start;
+    }
+    .ai-message {
+      background: linear-gradient(135deg, #c9f2f2, #78d5e3);
+      color: #333;
+      text-align: right;
+      align-self: flex-end;
+    }
+    .loading {
+      font-style: italic;
+      color: #888;
+      animation: blink 1.5s infinite;
+    }
+    img.generated-image {
+      width: 100%;
+      max-width: 250px;
+      margin-top: 10px;
+      border-radius: 10px;
+      display: block;
+      cursor: pointer;
+      position: relative;
+    }
+    img.generated-image:hover {
+      opacity: 0.8;
+    }
+    #input-area {
+      display: flex;
+      padding: 15px;
+      background-color: #f4f4f4;
+      border-top: 1px solid #ddd;
+    }
+    #input-text {
+      flex: 1;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 25px;
+      font-size: 16px;
+      outline: none;
+    }
+    #send-button {
+      margin-left: 10px;
+      padding: 15px 20px;
+      background: linear-gradient(135deg, #007bff, #6c63ff);
+      color: white;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+    }
+    #send-button:hover {
+      background: linear-gradient(135deg, #0056b3, #4d41d9);
+    }
+    .image-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.8);
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      max-width: 90%;
+      max-height: 90%;
+    }
+    .close-modal {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-size: 24px;
+      color: white;
+      cursor: pointer;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="chatbox">
+  <div id="header">OMERAI</div>
+  <div id="messages"></div>
+  <div id="input-area">
+    <input type="text" id="input-text" placeholder="Type your message here...">
+    <button id="send-button">Send</button>
+  </div>
+</div>
+
+<div class="image-modal" id="imageModal">
+  <div class="close-modal" onclick="closeImageModal()">×</div>
+  <img id="modalImage" class="modal-content" />
+</div>
+
+<script>
+const messagesContainer = document.getElementById('messages');
+const inputText = document.getElementById('input-text');
+const sendButton = document.getElementById('send-button');
+const imageModal = document.getElementById('imageModal');
+const modalImage = document.getElementById('modalImage');
+let processing = false;
+
+document.addEventListener("DOMContentLoaded", () => {
+  const savedChats = JSON.parse(localStorage.getItem('mkai_chats')) || [];
+  if (savedChats.length === 0) {
+    addMessage('ai', "👋 Hello! I'm OMER AI, how can I help you? use generate to make a picture with your prompt");
+  } else {
+    savedChats.forEach(chat => {
+      if (chat.type === 'ai' && chat.image) {
+        addGeneratedImage(chat.message, chat.image);
+      } else {
+        addMessage(chat.type, chat.message);
+      }
+    });
+  }
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+});
+
+function saveMessage(type, message, image = null) {
+  const savedChats = JSON.parse(localStorage.getItem('mkai_chats')) || [];
+  savedChats.push({ type, message, image });
+  localStorage.setItem('mkai_chats', JSON.stringify(savedChats));
+}
+
+function addMessage(type, message) {
+  const div = document.createElement('div');
+  div.className = `${type}-message`;
+  div.textContent = message;
+  messagesContainer.appendChild(div);
+  autoScroll();
+}
+
+function addGeneratedImage(prompt, imageUrl) {
+  const div = document.createElement('div');
+  div.className = 'ai-message';
+  div.innerHTML = `<strong>Generated Image:</strong>
+                   <img src="${imageUrl}" alt="Generated Image" class="generated-image" onclick="viewImage('${imageUrl}')">
+                   `;
+  messagesContainer.appendChild(div);
+  saveMessage('ai', prompt, imageUrl);
+  autoScroll();
+}
+
+function showLoading() {
+  const div = document.createElement('div');
+  div.className = 'ai-message loading';
+  div.textContent = '...';
+  messagesContainer.appendChild(div);
+  return div;
+}
+
+function autoScroll() {
+  const isAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop === messagesContainer.clientHeight;
+  if (isAtBottom) {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+}
+
+sendButton.addEventListener('click', async () => {
+  const userMessage = inputText.value.trim();
+  if (!userMessage || processing) return;
+
+  processing = true;
+  inputText.disabled = true;
+  sendButton.disabled = true;
+
+  addMessage('user', userMessage);
+  saveMessage('user', userMessage);
+  inputText.value = "";
+
+  const loadingMessage = showLoading();
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+  try {
+    if (userMessage.toLowerCase().includes("generate")) {
+      const prompt = userMessage.replace(/generate/i, "").trim();
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+      messagesContainer.removeChild(loadingMessage);
+      addGeneratedImage(prompt, imageUrl);
+    } else {
+      const response = await fetch('https://mkllm.hideme.eu.org/' + encodeURIComponent(userMessage));
+      const data = await response.text();
+      messagesContainer.removeChild(loadingMessage);
+      addMessage('ai', data);
+      saveMessage('ai', data);
+    }
+  } catch (error) {
+    messagesContainer.removeChild(loadingMessage);
+    addMessage('ai', "Error processing your message. Please try again.");
+  }
+
+  processing = false;
+  inputText.disabled = false;
+  sendButton.disabled = false;
+  autoScroll();
+});
+
+function viewImage(url) {
+  modalImage.src = url;
+  imageModal.style.display = 'flex';
+}
+
+function closeImageModal() {
+  imageModal.style.display = 'none';
+}
+
+document.addEventListener('touchstart', function(event) {
+  const image = event.target;
+  if (image.classList.contains('generated-image')) {
+    let pressTimer;
+    image.addEventListener('touchend', function() {
+      clearTimeout(pressTimer);
+    });
+    pressTimer = setTimeout(function() {
+      const link = document.createElement('a');
+      link.href = image.src;
+      link.download = 'ai-generated-image.jpg';
+      link.click();
+    }, 1000);
+  }
+});
+</script>
+
+</body>
+</html>
